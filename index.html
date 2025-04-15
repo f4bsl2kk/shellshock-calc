@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ShellShock Live - Zielgenauigkeitsrechner</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.4.0/dist/chartjs-plugin-annotation.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -94,6 +93,8 @@
     canvas {
       background: #fff;
       margin-top: 30px;
+      max-width: 100%;
+      height: 250px !important;
     }
     .section {
       display: none;
@@ -145,7 +146,7 @@
       <input type="number" id="power" placeholder="Power (z.B. 50)">
       <input type="number" id="targetX" placeholder="Ziel X-Position">
       <button class="main-button" onclick="simulateTrajectory()">Flugbahn anzeigen</button>
-      <canvas id="trajectoryChart" width="800" height="400"></canvas>
+      <canvas id="trajectoryChart" width="600" height="250"></canvas>
       <button class="main-button" onclick="downloadChartImage()">Bild herunterladen</button>
       <div id="flugbahnError" class="error"></div>
     </section>
@@ -194,16 +195,15 @@
       const angleRad = angle * Math.PI / 180;
       const vx = power * Math.cos(angleRad);
       const vy = power * Math.sin(angleRad);
-      const flightTime = (2 * vy) / GRAVITY;
-
       const xPoints = [];
       const yPoints = [];
-      for (let t = 0; t <= flightTime; t += 0.05) {
+
+      for (let t = 0; t <= 5; t += 0.1) {
         const x = vx * t;
         const y = vy * t - 0.5 * GRAVITY * t * t;
         if (y < 0) break;
-        xPoints.push(x);
-        yPoints.push(y);
+        xPoints.push(x.toFixed(2));
+        yPoints.push(y.toFixed(2));
       }
 
       drawChart(xPoints, yPoints, targetX);
@@ -212,18 +212,6 @@
     function drawChart(x, y, targetX) {
       const ctx = document.getElementById('trajectoryChart').getContext('2d');
       if (window.chart) window.chart.destroy();
-
-      let closestIndex = 0;
-      let minDiff = Infinity;
-      x.forEach((val, idx) => {
-        const diff = Math.abs(val - targetX);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closestIndex = idx;
-        }
-      });
-
-      Chart.register(window['chartjs-plugin-annotation']);
 
       window.chart = new Chart(ctx, {
         type: 'line',
@@ -234,17 +222,8 @@
               label: 'Flugbahn',
               data: y,
               borderColor: 'limegreen',
-              tension: 0.1,
+              tension: 0,
               pointRadius: 0
-            },
-            {
-              label: 'Zielposition',
-              data: x.map((_, i) => i === closestIndex ? y[closestIndex] : null),
-              borderColor: 'red',
-              backgroundColor: 'red',
-              pointRadius: 8,
-              pointHoverRadius: 10,
-              showLine: false
             }
           ]
         },
@@ -253,60 +232,18 @@
           maintainAspectRatio: false,
           scales: {
             x: {
-              title: {
-                display: true,
-                text: 'X-Distanz'
-              },
-              ticks: {
-                callback: function(value, index) {
-                  return parseFloat(value).toFixed(0);
-                },
-                color: '#fff'
-              },
-              grid: {
-                color: '#555'
-              }
+              title: { display: true, text: 'X-Distanz' },
+              ticks: { color: '#fff' },
+              grid: { color: '#555' }
             },
             y: {
-              title: {
-                display: true,
-                text: 'Y-Höhe'
-              },
-              ticks: {
-                callback: function(value, index) {
-                  return parseFloat(value).toFixed(0);
-                },
-                color: '#fff'
-              },
-              grid: {
-                color: '#555'
-              }
+              title: { display: true, text: 'Y-Höhe' },
+              ticks: { color: '#fff' },
+              grid: { color: '#555' }
             }
           },
           plugins: {
-            annotation: {
-              annotations: {
-                targetLine: {
-                  type: 'line',
-                  scaleID: 'x',
-                  value: targetX,
-                  borderColor: 'red',
-                  borderWidth: 2,
-                  borderDash: [5, 5],
-                  label: {
-                    display: true,
-                    content: 'Ziel',
-                    position: 'start',
-                    color: 'red'
-                  }
-                }
-              }
-            },
-            legend: {
-              labels: {
-                color: '#fff'
-              }
-            }
+            legend: { labels: { color: '#fff' } }
           }
         }
       });
