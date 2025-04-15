@@ -93,8 +93,6 @@
     canvas {
       background: #fff;
       margin-top: 30px;
-      max-width: 100%;
-      height: 250px !important;
     }
     .section {
       display: none;
@@ -115,12 +113,17 @@
       font-weight: bold;
       margin-top: 10px;
     }
+    .note {
+      margin-top: 10px;
+      font-size: 0.9em;
+      color: #ccc;
+    }
   </style>
 </head>
 <body>
   <header>
     <div class="menu-left">
-      <div class="menu-icon" onclick="toggleMenu()">☰</div>
+      <div class="menu-icon">☰</div>
       <button class="home-button" onclick="showSection('home')">Home</button>
     </div>
     <div class="title">
@@ -132,6 +135,7 @@
   <nav id="menu">
     <button onclick="showSection('flugbahn')">Flugbahn berechnen</button>
     <button onclick="showSection('winkel')">Winkel berechnen</button>
+    <button onclick="showSection('screenshot')">Screenshot-Koordinaten messen</button>
   </nav>
 
   <main>
@@ -141,38 +145,37 @@
     </section>
 
     <section id="flugbahn" class="section">
-      <h2>Flugbahn-Berechnung</h2>
-      <input type="number" id="angle" placeholder="Winkel (z.B. 45)">
-      <input type="number" id="power" placeholder="Power (z.B. 50)">
-      <input type="number" id="targetX" placeholder="Ziel X-Position">
-      <button class="main-button" onclick="simulateTrajectory()">Flugbahn anzeigen</button>
-      <canvas id="trajectoryChart" width="600" height="250"></canvas>
-      <button class="main-button" onclick="downloadChartImage()">Bild herunterladen</button>
-      <div id="flugbahnError" class="error"></div>
+      <h2>Flugbahn berechnen</h2>
+      <input type="number" id="speed" placeholder="Startgeschwindigkeit (v)">
+      <input type="number" id="angle" placeholder="Abschusswinkel (°)">
+      <input type="number" id="targetHeight" placeholder="Zielhöhe (optional)">
+      <button class="main-button" onclick="berechneFlugbahn()">📈 Flugbahn berechnen</button>
+      <p id="flugbahnResult"></p>
     </section>
 
     <section id="winkel" class="section">
       <h2>Winkel berechnen</h2>
-      <input type="number" id="powerW" placeholder="Power">
-      <input type="number" id="targetXW" placeholder="Ziel X-Position">
-      <input type="number" id="targetYW" placeholder="Ziel Y-Höhe">
-      <button class="main-button" onclick="calculateAngle()">Winkel berechnen</button>
-      <p id="winkelErgebnis"></p>
-      <div id="winkelError" class="error"></div>
+      <input type="number" id="deltaX" placeholder="ΔX (Entfernung)">
+      <input type="number" id="deltaY" placeholder="ΔY (Höhenunterschied)">
+      <button class="main-button" onclick="berechneWinkel()">🔍 Winkel berechnen</button>
+      <p id="winkelResult"></p>
+    </section>
+
+    <section id="screenshot" class="section">
+      <h2>Screenshot-Koordinaten & Flugbahn</h2>
+      <input type="file" accept="image/*" onchange="loadScreenshot(event)">
+      <canvas id="screenshotCanvas" width="800" height="400" style="margin-top: 20px; cursor: crosshair; background:#222;"></canvas>
+      <p id="coordOutput">Klicke zwei Punkte: Start → Ziel</p>
+      <button class="main-button" onclick="resetScreenshotCanvas()">🔁 Reset</button>
     </section>
   </main>
 
   <script>
-    const GRAVITY = 9.81;
-
-    window.addEventListener('DOMContentLoaded', () => {
-      showSection('home');
+    document.addEventListener("DOMContentLoaded", function () {
+      document.querySelector('.menu-icon').addEventListener('click', function () {
+        document.getElementById('menu').classList.toggle('show');
+      });
     });
-
-    function toggleMenu() {
-      const menu = document.getElementById('menu');
-      menu.classList.toggle('show');
-    }
 
     function showSection(id) {
       document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
@@ -180,108 +183,107 @@
       document.getElementById('menu').classList.remove('show');
     }
 
-    function simulateTrajectory() {
-      const angle = parseFloat(document.getElementById("angle").value);
-      const power = parseFloat(document.getElementById("power").value);
-      const targetX = parseFloat(document.getElementById("targetX").value);
-      const errorDiv = document.getElementById("flugbahnError");
-      errorDiv.textContent = "";
-
-      if (isNaN(angle) || isNaN(power) || isNaN(targetX)) {
-        errorDiv.textContent = "Bitte gültige Werte eingeben.";
+    function berechneWinkel() {
+      const dx = parseFloat(document.getElementById('deltaX').value);
+      const dy = parseFloat(document.getElementById('deltaY').value);
+      const result = document.getElementById('winkelResult');
+      if (isNaN(dx) || isNaN(dy)) {
+        result.textContent = "Bitte gib gültige Werte für ΔX und ΔY ein.";
         return;
       }
-
-      const angleRad = angle * Math.PI / 180;
-      const vx = power * Math.cos(angleRad);
-      const vy = power * Math.sin(angleRad);
-      const xPoints = [];
-      const yPoints = [];
-
-      for (let t = 0; t <= 5; t += 0.1) {
-        const x = vx * t;
-        const y = vy * t - 0.5 * GRAVITY * t * t;
-        if (y < 0) break;
-        xPoints.push(x.toFixed(2));
-        yPoints.push(y.toFixed(2));
-      }
-
-      drawChart(xPoints, yPoints, targetX);
+      const winkel = Math.round(Math.atan2(dy, dx) * 180 / Math.PI);
+      result.textContent = `ΔX: ${dx}, ΔY: ${dy}, Abschusswinkel: ${winkel}°`;
     }
 
-    function drawChart(x, y, targetX) {
-      const ctx = document.getElementById('trajectoryChart').getContext('2d');
-      if (window.chart) window.chart.destroy();
-
-      window.chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: x,
-          datasets: [
-            {
-              label: 'Flugbahn',
-              data: y,
-              borderColor: 'limegreen',
-              tension: 0,
-              pointRadius: 0
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            x: {
-              title: { display: true, text: 'X-Distanz' },
-              ticks: { color: '#fff' },
-              grid: { color: '#555' }
-            },
-            y: {
-              title: { display: true, text: 'Y-Höhe' },
-              ticks: { color: '#fff' },
-              grid: { color: '#555' }
-            }
-          },
-          plugins: {
-            legend: { labels: { color: '#fff' } }
-          }
+    function berechneFlugbahn() {
+      const v = parseFloat(document.getElementById('speed').value);
+      const a = parseFloat(document.getElementById('angle').value);
+      const h = parseFloat(document.getElementById('targetHeight').value);
+      const result = document.getElementById('flugbahnResult');
+      if (isNaN(v) || isNaN(a)) {
+        result.textContent = "Bitte gib gültige Werte für Geschwindigkeit und Winkel ein.";
+        return;
+      }
+      const rad = a * Math.PI / 180;
+      const g = 9.81;
+      let flugzeit, reichweite;
+      if (isNaN(h)) {
+        flugzeit = (2 * v * Math.sin(rad)) / g;
+        reichweite = v * Math.cos(rad) * flugzeit;
+      } else {
+        const vy = v * Math.sin(rad);
+        const diskriminante = vy * vy - 2 * g * (-h);
+        if (diskriminante < 0) {
+          result.textContent = "Das Ziel ist mit diesen Parametern nicht erreichbar.";
+          return;
         }
-      });
+        const t1 = (vy + Math.sqrt(diskriminante)) / g;
+        flugzeit = t1;
+        reichweite = v * Math.cos(rad) * flugzeit;
+      }
+      result.textContent = `Flugzeit: ${flugzeit.toFixed(2)}s, Reichweite: ${reichweite.toFixed(2)}m`;
     }
 
-    function calculateAngle() {
-      const power = parseFloat(document.getElementById("powerW").value);
-      const x = parseFloat(document.getElementById("targetXW").value);
-      const y = parseFloat(document.getElementById("targetYW").value);
-      const resultP = document.getElementById("winkelErgebnis");
-      const errorDiv = document.getElementById("winkelError");
-      resultP.textContent = "";
-      errorDiv.textContent = "";
+    let screenshotImage = new Image();
+    let shotPoints = [];
 
-      if (isNaN(power) || isNaN(x) || isNaN(y)) {
-        errorDiv.textContent = "Bitte gültige Werte eingeben.";
-        return;
-      }
-
-      const g = GRAVITY;
-      const inside = (power ** 4) - g * (g * x * x + 2 * y * power * power);
-
-      if (inside < 0) {
-        errorDiv.textContent = "Keine Lösung möglich (Wert außerhalb des Definitionsbereichs).";
-        return;
-      }
-
-      const angleRad = Math.atan((power * power - Math.sqrt(inside)) / (g * x));
-      const angleDeg = angleRad * 180 / Math.PI;
-
-      resultP.textContent = `Benötigter Winkel: ${angleDeg.toFixed(2)}°`;
+    function loadScreenshot(event) {
+      const canvas = document.getElementById('screenshotCanvas');
+      const ctx = canvas.getContext('2d');
+      const file = event.target.files[0];
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        screenshotImage.onload = function() {
+          canvas.width = screenshotImage.width;
+          canvas.height = screenshotImage.height;
+          ctx.drawImage(screenshotImage, 0, 0);
+          shotPoints = [];
+        };
+        screenshotImage.src = e.target.result;
+      };
+      if (file) reader.readAsDataURL(file);
     }
 
-    function downloadChartImage() {
-      const link = document.createElement('a');
-      link.download = 'flugbahn.png';
-      link.href = document.getElementById('trajectoryChart').toDataURL('image/png');
-      link.click();
+    document.getElementById('screenshotCanvas').addEventListener('click', function(e) {
+      const canvas = this;
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.round(e.clientX - rect.left);
+      const y = Math.round(e.clientY - rect.top);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = "red";
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, 2 * Math.PI);
+      ctx.fill();
+      shotPoints.push({x, y});
+
+      if (shotPoints.length === 2) {
+        ctx.beginPath();
+        const start = shotPoints[0];
+        const end = shotPoints[1];
+        const steps = 50;
+        ctx.strokeStyle = 'lime';
+        ctx.lineWidth = 2;
+        ctx.moveTo(start.x, start.y);
+        for (let i = 1; i <= steps; i++) {
+          const t = i / steps;
+          const xt = start.x + t * (end.x - start.x);
+          const yt = start.y + t * (end.y - start.y) - 0.01 * (1 - t) * t * 1000; // parabelform
+          ctx.lineTo(xt, yt);
+        }
+        ctx.stroke();
+      }
+      document.getElementById('coordOutput').textContent = `X: ${x}, Y: ${y}`;
+    });
+
+    function resetScreenshotCanvas() {
+      const canvas = document.getElementById('screenshotCanvas');
+      const ctx = canvas.getContext('2d');
+      shotPoints = [];
+      if (screenshotImage.src) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(screenshotImage, 0, 0);
+        document.getElementById('coordOutput').textContent = "Bild zurückgesetzt.";
+      }
     }
   </script>
 </body>
