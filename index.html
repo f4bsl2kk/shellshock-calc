@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ShellShock Live - Zielgenauigkeitsrechner</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.4.0/dist/chartjs-plugin-annotation.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #1e1e1e;
+      color: #eee;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background: #2c2c2c;
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .menu-left {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .menu-icon {
+      font-size: 24px;
+      cursor: pointer;
+    }
+    .logo {
+      width: 200px;
+      height: 120px;
+    }
+    .home-button {
+      padding: 8px 16px;
+      background: #4caf50;
+      border: none;
+      border-radius: 5px;
+      color: white;
+      cursor: pointer;
+    }
+    .home-button:hover {
+      background: #45a049;
+    }
+    .title {
+      flex-grow: 1;
+      text-align: center;
+    }
+    nav {
+      background: #3a3a3a;
+      padding: 10px;
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+    }
+    nav.show {
+      display: flex;
+    }
+    nav button {
+      padding: 10px 20px;
+      background: #4caf50;
+      border: none;
+      border-radius: 5px;
+      color: white;
+      cursor: pointer;
+    }
+    nav button:hover {
+      background: #45a049;
+    }
+    main {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+    }
+    input, .main-button {
+      padding: 10px;
+      margin: 10px;
+      border-radius: 5px;
+      border: none;
+      width: 200px;
+    }
+    .main-button {
+      background-color: #4caf50;
+      color: white;
+      cursor: pointer;
+    }
+    .main-button:hover {
+      background-color: #45a049;
+    }
+    canvas {
+      background: #fff;
+      margin-top: 30px;
+    }
+    .section {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      transition: all 0.3s ease-in-out;
+      opacity: 0;
+      height: 0;
+      overflow: hidden;
+    }
+    .section.active {
+      display: flex;
+      opacity: 1;
+      height: auto;
+    }
+    .error {
+      color: red;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="menu-left">
+      <div class="menu-icon" onclick="toggleMenu()">☰</div>
+      <button class="home-button" onclick="showSection('home')">Home</button>
+    </div>
+    <div class="title">
+      <h1>ShellShock Live - Zielgenauigkeitsrechner</h1>
+    </div>
+    <img src="logo.png" alt="Logo" class="logo">
+  </header>
+
+  <nav id="menu">
+    <button onclick="showSection('flugbahn')">Flugbahn berechnen</button>
+    <button onclick="showSection('winkel')">Winkel berechnen</button>
+  </nav>
+
+  <main>
+    <section id="home" class="section active">
+      <h2>Willkommen beim ShellShock Live Zielgenauigkeitsrechner!</h2>
+      <p>Nutze die Navigation oben, um die gewünschte Berechnung auszuwählen.</p>
+    </section>
+
+    <section id="flugbahn" class="section">
+      <h2>Flugbahn-Berechnung</h2>
+      <input type="number" id="angle" placeholder="Winkel (z.B. 45)">
+      <input type="number" id="power" placeholder="Power (z.B. 50)">
+      <input type="number" id="targetX" placeholder="Ziel X-Position">
+      <button class="main-button" onclick="simulateTrajectory()">Flugbahn anzeigen</button>
+      <canvas id="trajectoryChart" width="800" height="400"></canvas>
+      <button class="main-button" onclick="downloadChartImage()">Bild herunterladen</button>
+      <div id="flugbahnError" class="error"></div>
+    </section>
+
+    <section id="winkel" class="section">
+      <h2>Winkel berechnen</h2>
+      <input type="number" id="powerW" placeholder="Power">
+      <input type="number" id="targetXW" placeholder="Ziel X-Position">
+      <input type="number" id="targetYW" placeholder="Ziel Y-Höhe">
+      <button class="main-button" onclick="calculateAngle()">Winkel berechnen</button>
+      <p id="winkelErgebnis"></p>
+      <div id="winkelError" class="error"></div>
+    </section>
+  </main>
+
+  <script>
+    const GRAVITY = 9.81;
+
+    window.addEventListener('DOMContentLoaded', () => {
+      showSection('home');
+    });
+
+    function toggleMenu() {
+      const menu = document.getElementById('menu');
+      menu.classList.toggle('show');
+    }
+
+    function showSection(id) {
+      document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+      document.getElementById('menu').classList.remove('show');
+    }
+
+    function simulateTrajectory() {
+      const angle = parseFloat(document.getElementById("angle").value);
+      const power = parseFloat(document.getElementById("power").value);
+      const targetX = parseFloat(document.getElementById("targetX").value);
+      const errorDiv = document.getElementById("flugbahnError");
+      errorDiv.textContent = "";
+
+      if (isNaN(angle) || isNaN(power) || isNaN(targetX)) {
+        errorDiv.textContent = "Bitte gültige Werte eingeben.";
+        return;
+      }
+
+      const angleRad = angle * Math.PI / 180;
+      const vx = power * Math.cos(angleRad);
+      const vy = power * Math.sin(angleRad);
+      const flightTime = (2 * vy) / GRAVITY;
+
+      const xPoints = [];
+      const yPoints = [];
+      for (let t = 0; t <= flightTime; t += 0.05) {
+        const x = vx * t;
+        const y = vy * t - 0.5 * GRAVITY * t * t;
+        if (y < 0) break;
+        xPoints.push(x);
+        yPoints.push(y);
+      }
+
+      drawChart(xPoints, yPoints, targetX);
+    }
+
+    function drawChart(x, y, targetX) {
+      const ctx = document.getElementById('trajectoryChart').getContext('2d');
+      if (window.chart) window.chart.destroy();
+
+      let closestIndex = 0;
+      let minDiff = Infinity;
+      x.forEach((val, idx) => {
+        const diff = Math.abs(val - targetX);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestIndex = idx;
+        }
+      });
+
+      Chart.register(window['chartjs-plugin-annotation']);
+
+      window.chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: x,
+          datasets: [
+            {
+              label: 'Flugbahn',
+              data: y,
+              borderColor: 'limegreen',
+              tension: 0.1,
+              pointRadius: 0
+            },
+            {
+              label: 'Zielposition',
+              data: x.map((_, i) => i === closestIndex ? y[closestIndex] : null),
+              borderColor: 'red',
+              backgroundColor: 'red',
+              pointRadius: 8,
+              pointHoverRadius: 10,
+              showLine: false
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              title: {
+                display: true,
+                text: 'X-Distanz'
+              },
+              ticks: {
+                callback: function(value, index) {
+                  return parseFloat(value).toFixed(0);
+                },
+                color: '#fff'
+              },
+              grid: {
+                color: '#555'
+              }
+            },
+            y: {
+              title: {
+                display: true,
+                text: 'Y-Höhe'
+              },
+              ticks: {
+                callback: function(value, index) {
+                  return parseFloat(value).toFixed(0);
+                },
+                color: '#fff'
+              },
+              grid: {
+                color: '#555'
+              }
+            }
+          },
+          plugins: {
+            annotation: {
+              annotations: {
+                targetLine: {
+                  type: 'line',
+                  scaleID: 'x',
+                  value: targetX,
+                  borderColor: 'red',
+                  borderWidth: 2,
+                  borderDash: [5, 5],
+                  label: {
+                    display: true,
+                    content: 'Ziel',
+                    position: 'start',
+                    color: 'red'
+                  }
+                }
+              }
+            },
+            legend: {
+              labels: {
+                color: '#fff'
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function calculateAngle() {
+      const power = parseFloat(document.getElementById("powerW").value);
+      const x = parseFloat(document.getElementById("targetXW").value);
+      const y = parseFloat(document.getElementById("targetYW").value);
+      const resultP = document.getElementById("winkelErgebnis");
+      const errorDiv = document.getElementById("winkelError");
+      resultP.textContent = "";
+      errorDiv.textContent = "";
+
+      if (isNaN(power) || isNaN(x) || isNaN(y)) {
+        errorDiv.textContent = "Bitte gültige Werte eingeben.";
+        return;
+      }
+
+      const g = GRAVITY;
+      const inside = (power ** 4) - g * (g * x * x + 2 * y * power * power);
+
+      if (inside < 0) {
+        errorDiv.textContent = "Keine Lösung möglich (Wert außerhalb des Definitionsbereichs).";
+        return;
+      }
+
+      const angleRad = Math.atan((power * power - Math.sqrt(inside)) / (g * x));
+      const angleDeg = angleRad * 180 / Math.PI;
+
+      resultP.textContent = `Benötigter Winkel: ${angleDeg.toFixed(2)}°`;
+    }
+
+    function downloadChartImage() {
+      const link = document.createElement('a');
+      link.download = 'flugbahn.png';
+      link.href = document.getElementById('trajectoryChart').toDataURL('image/png');
+      link.click();
+    }
+  </script>
+</body>
+</html>
